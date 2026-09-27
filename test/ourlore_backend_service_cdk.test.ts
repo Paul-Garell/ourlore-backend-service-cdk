@@ -1,17 +1,15 @@
-// import * as cdk from 'aws-cdk-lib';
-// import { Template } from 'aws-cdk-lib/assertions';
-// import * as OurloreBackendServiceCdk from '../lib/ourlore_backend_service_cdk-stack';
+import * as cdk from 'aws-cdk-lib';
+import { Template } from 'aws-cdk-lib/assertions';
+import { OurloreBackendServiceCdkStack } from '../lib/ourlore_backend_service_cdk-stack';
 
-// example test. To run these tests, uncomment this file along with the
-// example resource in lib/ourlore_backend_service_cdk-stack.ts
-test('SQS Queue Created', () => {
-//   const app = new cdk.App();
-//     // WHEN
-//   const stack = new OurloreBackendServiceCdk.OurloreBackendServiceCdkStack(app, 'MyTestStack');
-//     // THEN
-//   const template = Template.fromStack(stack);
+describe('OurloreBackendServiceCdkStack', () => {
+  test('synthesizes a valid CloudFormation template', () => {
+    const app = new cdk.App();
+    const stack = new OurloreBackendServiceCdkStack(app, 'TestStack');
 
-//   template.hasResourceProperties('AWS::SQS::Queue', {
-//     VisibilityTimeout: 300
-//   });
+    // Template.fromStack throws if the stack fails to synthesize.
+    const template = Template.fromStack(stack);
+
+    expect(template.toJSON()).toBeDefined();
+  });
 });
