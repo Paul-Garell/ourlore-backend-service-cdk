@@ -1,0 +1,8 @@
+# Block commits that contain secrets. This repo is public.
+if ! command -v gitleaks >/dev/null 2>&1; then
+  echo "pre-commit: gitleaks is not installed; refusing to commit." >&2
+  echo "  Install it with: brew install gitleaks" >&2
+  exit 1
+fi
+
+gitleaks git --pre-commit --staged --redact --no-banner .
