@@ -1,6 +1,7 @@
 {
   "name": "ourlore_backend_service_cdk",
   "version": "0.1.0",
+  "license": "MIT",
   "bin": {
     "ourlore_backend_service_cdk": "bin/ourlore_backend_service_cdk.js"
   },
