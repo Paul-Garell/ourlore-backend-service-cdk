@@ -1,0 +1,241 @@
+{
+  "env_vars": {
+    "CURSOR_SECRET_ARN": "Secrets Manager ARN of the cursor-signing HMAC key",
+    "MEDIA_BUCKET": "Private media S3 bucket name",
+    "MEDIA_CDN_DOMAIN": "CloudFront distribution domain for media",
+    "POWERTOOLS_LOG_LEVEL": "Powertools log level",
+    "POWERTOOLS_SERVICE_NAME": "Powertools service name (observability)",
+    "TABLE_FOLLOWS": "Follows table name",
+    "TABLE_FOLLOW_REQUESTS": "FollowRequests table name",
+    "TABLE_IDEMPOTENCY": "Idempotency table name",
+    "TABLE_LIKES": "Likes table name",
+    "TABLE_POSTS": "Posts table name",
+    "TABLE_SO_REQUESTS": "SignificantOtherRequests table name",
+    "TABLE_USERNAMES": "Usernames table name",
+    "TABLE_USERS": "Users table name",
+    "TABLE_WISHES": "Wishes table name"
+  },
+  "resource_groups": {
+    "posts": {
+      "buckets": {
+        "media": "read_write"
+      },
+      "handler": "app.handlers.posts_handler.handler",
+      "reads_cursor_secret": true,
+      "routes": [
+        {
+          "auth": true,
+          "method": "GET",
+          "path": "/v1/users/{userId}/timeline"
+        },
+        {
+          "auth": true,
+          "method": "GET",
+          "path": "/v1/map/posts"
+        },
+        {
+          "auth": true,
+          "method": "POST",
+          "path": "/v1/posts"
+        },
+        {
+          "auth": true,
+          "method": "PUT",
+          "path": "/v1/posts/{postId}"
+        },
+        {
+          "auth": true,
+          "method": "PUT",
+          "path": "/v1/posts/{postId}/like"
+        },
+        {
+          "auth": true,
+          "method": "DELETE",
+          "path": "/v1/posts/{postId}/like"
+        }
+      ],
+      "tables": {
+        "follows": "read",
+        "idempotency": "read_write",
+        "likes": "read_write",
+        "posts": "read_write",
+        "so_requests": "read",
+        "users": "read_write"
+      }
+    },
+    "social": {
+      "buckets": {},
+      "handler": "app.handlers.social_handler.handler",
+      "reads_cursor_secret": true,
+      "routes": [
+        {
+          "auth": true,
+          "method": "POST",
+          "path": "/v1/users/{userId}/follow-requests"
+        },
+        {
+          "auth": true,
+          "method": "DELETE",
+          "path": "/v1/users/{userId}/follow-requests/me"
+        },
+        {
+          "auth": true,
+          "method": "GET",
+          "path": "/v1/me/follow-requests"
+        },
+        {
+          "auth": true,
+          "method": "POST",
+          "path": "/v1/me/follow-requests/{requesterId}/accept"
+        },
+        {
+          "auth": true,
+          "method": "POST",
+          "path": "/v1/me/follow-requests/{requesterId}/reject"
+        },
+        {
+          "auth": true,
+          "method": "DELETE",
+          "path": "/v1/users/{userId}/follow"
+        },
+        {
+          "auth": true,
+          "method": "POST",
+          "path": "/v1/users/{userId}/significant-other-requests"
+        },
+        {
+          "auth": true,
+          "method": "GET",
+          "path": "/v1/me/significant-other-requests"
+        },
+        {
+          "auth": true,
+          "method": "DELETE",
+          "path": "/v1/users/{userId}/significant-other-requests/me"
+        },
+        {
+          "auth": true,
+          "method": "POST",
+          "path": "/v1/me/significant-other-requests/{requesterId}/accept"
+        },
+        {
+          "auth": true,
+          "method": "DELETE",
+          "path": "/v1/me/significant-other-requests/{requesterId}"
+        },
+        {
+          "auth": true,
+          "method": "DELETE",
+          "path": "/v1/me/significant-other"
+        }
+      ],
+      "tables": {
+        "follow_requests": "read_write",
+        "follows": "read_write",
+        "so_requests": "read_write",
+        "users": "read_write"
+      }
+    },
+    "uploads": {
+      "buckets": {
+        "media": "put"
+      },
+      "handler": "app.handlers.uploads_handler.handler",
+      "reads_cursor_secret": false,
+      "routes": [
+        {
+          "auth": true,
+          "method": "POST",
+          "path": "/v1/uploads"
+        }
+      ],
+      "tables": {}
+    },
+    "users": {
+      "buckets": {
+        "media": "read_write"
+      },
+      "handler": "app.handlers.users_handler.handler",
+      "reads_cursor_secret": true,
+      "routes": [
+        {
+          "auth": false,
+          "method": "GET",
+          "path": "/v1/usernames/{username}/availability"
+        },
+        {
+          "auth": true,
+          "method": "POST",
+          "path": "/v1/me"
+        },
+        {
+          "auth": true,
+          "method": "GET",
+          "path": "/v1/me"
+        },
+        {
+          "auth": true,
+          "method": "PATCH",
+          "path": "/v1/me"
+        },
+        {
+          "auth": true,
+          "method": "PUT",
+          "path": "/v1/me/avatar"
+        },
+        {
+          "auth": true,
+          "method": "GET",
+          "path": "/v1/me/following"
+        },
+        {
+          "auth": true,
+          "method": "GET",
+          "path": "/v1/users"
+        },
+        {
+          "auth": true,
+          "method": "GET",
+          "path": "/v1/users/{userId}"
+        }
+      ],
+      "tables": {
+        "follow_requests": "read_write",
+        "follows": "read_write",
+        "posts": "read",
+        "usernames": "read_write",
+        "users": "read_write"
+      }
+    },
+    "wishes": {
+      "buckets": {},
+      "handler": "app.handlers.wishes_handler.handler",
+      "reads_cursor_secret": true,
+      "routes": [
+        {
+          "auth": true,
+          "method": "GET",
+          "path": "/v1/me/dream-list"
+        },
+        {
+          "auth": true,
+          "method": "POST",
+          "path": "/v1/wishes"
+        }
+      ],
+      "tables": {
+        "follows": "read",
+        "idempotency": "read_write",
+        "users": "read",
+        "wishes": "read_write"
+      }
+    }
+  },
+  "runtime": {
+    "architecture": "arm64",
+    "memory_mb": 256,
+    "runtime": "python3.12",
+    "timeout_seconds": 15
+  },
+  "version": 1
+}
