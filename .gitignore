@@ -6,3 +6,16 @@ node_modules
 # CDK asset staging directory
 .cdk.staging
 cdk.out
+
+# CDK context cache — contains account IDs, VPC/subnet IDs, AZs from lookups.
+# Kept out of this public repo; it is regenerated automatically on synth.
+cdk.context.json
+
+# Secrets / local environment — never commit
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.aws/
+credentials*
