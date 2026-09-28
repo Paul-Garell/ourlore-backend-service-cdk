@@ -1,10 +1,46 @@
 {
+  "buckets": {
+    "media": {
+      "description": "Private media bucket (\u00a78)",
+      "env_var": "MEDIA_BUCKET"
+    }
+  },
+  "cognito_triggers": {
+    "pre_sign_up": {
+      "buckets": {},
+      "cognito_actions": [
+        "ListUsers"
+      ],
+      "env": [
+        "IDP_REGISTRY",
+        "POWERTOOLS_LOG_LEVEL",
+        "POWERTOOLS_SERVICE_NAME"
+      ],
+      "handler": "app.handlers.pre_sign_up_handler.handler",
+      "memory_mb": 256,
+      "parameters": {},
+      "queues": {},
+      "secrets": {},
+      "tables": {},
+      "timeout_seconds": 5
+    }
+  },
+  "deferred_env_vars": [
+    "MEDIA_CDN_DOMAIN"
+  ],
   "env_vars": {
-    "CURSOR_SECRET_ARN": "Secrets Manager ARN of the cursor-signing HMAC key",
+    "ACCOUNT_PURGE_DLQ_URL": "URL of the account-purge dead-letter queue (maintenance only)",
+    "ACCOUNT_PURGE_QUEUE_URL": "URL of the account-purge SQS queue",
+    "APPLE_SECRET_ARN": "Secrets Manager ARN of the Sign in with Apple secret; '' if disabled",
+    "COGNITO_APP_CLIENT_IDS": "Comma-separated app client ids whose access tokens are accepted",
+    "COGNITO_USER_POOL_ID": "User pool id (purge worker and maintenance only)",
+    "CURSOR_KEY_PARAM": "SSM SecureString parameter name of the cursor-signing HMAC key",
+    "IDP_REGISTRY": "JSON {\"<cognitoProviderNameLower>\": {\"id\": \"<idpId>\", \"emailVerified\": \"always\"|\"claim\"}} for the providers enabled in this stage",
     "MEDIA_BUCKET": "Private media S3 bucket name",
-    "MEDIA_CDN_DOMAIN": "CloudFront distribution domain for media",
+    "MEDIA_CDN_DOMAIN": "CloudFront distribution domain for media (deferred: '' for now)",
     "POWERTOOLS_LOG_LEVEL": "Powertools log level",
     "POWERTOOLS_SERVICE_NAME": "Powertools service name (observability)",
+    "TABLE_DELETION_JOBS": "DeletionJobs table name",
     "TABLE_FOLLOWS": "Follows table name",
     "TABLE_FOLLOW_REQUESTS": "FollowRequests table name",
     "TABLE_IDEMPOTENCY": "Idempotency table name",
@@ -15,220 +51,462 @@
     "TABLE_USERS": "Users table name",
     "TABLE_WISHES": "Wishes table name"
   },
+  "optional_env_vars": [
+    "APPLE_SECRET_ARN"
+  ],
+  "parameters": {
+    "cursor_key": {
+      "description": "/ourlore/<stage>/cursor-key, operator-created standard-tier SecureString holding a base64-encoded random key of at least 32 bytes",
+      "env_var": "CURSOR_KEY_PARAM"
+    }
+  },
+  "queues": {
+    "account_purge": {
+      "description": "Account-purge work queue (auth_design.md \u00a73.8)",
+      "env_var": "ACCOUNT_PURGE_QUEUE_URL"
+    },
+    "account_purge_dlq": {
+      "description": "Dead-letter queue of account_purge (maxReceiveCount 5)",
+      "env_var": "ACCOUNT_PURGE_DLQ_URL"
+    }
+  },
   "resource_groups": {
+    "account": {
+      "buckets": {},
+      "cognito_actions": [],
+      "env": [
+        "ACCOUNT_PURGE_QUEUE_URL",
+        "APPLE_SECRET_ARN",
+        "COGNITO_APP_CLIENT_IDS",
+        "IDP_REGISTRY",
+        "POWERTOOLS_LOG_LEVEL",
+        "POWERTOOLS_SERVICE_NAME",
+        "TABLE_DELETION_JOBS",
+        "TABLE_USERS"
+      ],
+      "handler": "app.handlers.account_handler.handler",
+      "memory_mb": 256,
+      "parameters": {},
+      "queues": {
+        "account_purge": "send"
+      },
+      "routes": [
+        {
+          "auth": true,
+          "method": "POST",
+          "path": "/v1/me/deletion",
+          "scopes": [
+            "aws.cognito.signin.user.admin"
+          ]
+        }
+      ],
+      "secrets": {
+        "apple": "read"
+      },
+      "tables": {
+        "deletion_jobs": "read_write",
+        "users": "read_write"
+      },
+      "timeout_seconds": 15
+    },
     "posts": {
       "buckets": {
         "media": "read_write"
       },
+      "cognito_actions": [],
+      "env": [
+        "COGNITO_APP_CLIENT_IDS",
+        "CURSOR_KEY_PARAM",
+        "MEDIA_BUCKET",
+        "MEDIA_CDN_DOMAIN",
+        "POWERTOOLS_LOG_LEVEL",
+        "POWERTOOLS_SERVICE_NAME",
+        "TABLE_DELETION_JOBS",
+        "TABLE_FOLLOWS",
+        "TABLE_IDEMPOTENCY",
+        "TABLE_LIKES",
+        "TABLE_POSTS",
+        "TABLE_SO_REQUESTS",
+        "TABLE_USERS"
+      ],
       "handler": "app.handlers.posts_handler.handler",
-      "reads_cursor_secret": true,
+      "memory_mb": 256,
+      "parameters": {
+        "cursor_key": "read"
+      },
+      "queues": {},
       "routes": [
         {
           "auth": true,
           "method": "GET",
-          "path": "/v1/users/{userId}/timeline"
+          "path": "/v1/users/{userId}/timeline",
+          "scopes": [
+            "aws.cognito.signin.user.admin"
+          ]
         },
         {
           "auth": true,
           "method": "GET",
-          "path": "/v1/map/posts"
+          "path": "/v1/map/posts",
+          "scopes": [
+            "aws.cognito.signin.user.admin"
+          ]
         },
         {
           "auth": true,
           "method": "POST",
-          "path": "/v1/posts"
+          "path": "/v1/posts",
+          "scopes": [
+            "aws.cognito.signin.user.admin"
+          ]
         },
         {
           "auth": true,
           "method": "PUT",
-          "path": "/v1/posts/{postId}"
+          "path": "/v1/posts/{postId}",
+          "scopes": [
+            "aws.cognito.signin.user.admin"
+          ]
         },
         {
           "auth": true,
           "method": "PUT",
-          "path": "/v1/posts/{postId}/like"
+          "path": "/v1/posts/{postId}/like",
+          "scopes": [
+            "aws.cognito.signin.user.admin"
+          ]
         },
         {
           "auth": true,
           "method": "DELETE",
-          "path": "/v1/posts/{postId}/like"
+          "path": "/v1/posts/{postId}/like",
+          "scopes": [
+            "aws.cognito.signin.user.admin"
+          ]
         }
       ],
+      "secrets": {},
       "tables": {
+        "deletion_jobs": "read",
         "follows": "read",
         "idempotency": "read_write",
         "likes": "read_write",
         "posts": "read_write",
         "so_requests": "read",
         "users": "read_write"
-      }
+      },
+      "timeout_seconds": 15
     },
     "social": {
       "buckets": {},
+      "cognito_actions": [],
+      "env": [
+        "COGNITO_APP_CLIENT_IDS",
+        "CURSOR_KEY_PARAM",
+        "POWERTOOLS_LOG_LEVEL",
+        "POWERTOOLS_SERVICE_NAME",
+        "TABLE_DELETION_JOBS",
+        "TABLE_FOLLOWS",
+        "TABLE_FOLLOW_REQUESTS",
+        "TABLE_SO_REQUESTS",
+        "TABLE_USERS"
+      ],
       "handler": "app.handlers.social_handler.handler",
-      "reads_cursor_secret": true,
+      "memory_mb": 256,
+      "parameters": {
+        "cursor_key": "read"
+      },
+      "queues": {},
       "routes": [
         {
           "auth": true,
           "method": "POST",
-          "path": "/v1/users/{userId}/follow-requests"
+          "path": "/v1/users/{userId}/follow-requests",
+          "scopes": [
+            "aws.cognito.signin.user.admin"
+          ]
         },
         {
           "auth": true,
           "method": "DELETE",
-          "path": "/v1/users/{userId}/follow-requests/me"
+          "path": "/v1/users/{userId}/follow-requests/me",
+          "scopes": [
+            "aws.cognito.signin.user.admin"
+          ]
         },
         {
           "auth": true,
           "method": "GET",
-          "path": "/v1/me/follow-requests"
+          "path": "/v1/me/follow-requests",
+          "scopes": [
+            "aws.cognito.signin.user.admin"
+          ]
         },
         {
           "auth": true,
           "method": "POST",
-          "path": "/v1/me/follow-requests/{requesterId}/accept"
+          "path": "/v1/me/follow-requests/{requesterId}/accept",
+          "scopes": [
+            "aws.cognito.signin.user.admin"
+          ]
         },
         {
           "auth": true,
           "method": "POST",
-          "path": "/v1/me/follow-requests/{requesterId}/reject"
+          "path": "/v1/me/follow-requests/{requesterId}/reject",
+          "scopes": [
+            "aws.cognito.signin.user.admin"
+          ]
         },
         {
           "auth": true,
           "method": "DELETE",
-          "path": "/v1/users/{userId}/follow"
+          "path": "/v1/users/{userId}/follow",
+          "scopes": [
+            "aws.cognito.signin.user.admin"
+          ]
         },
         {
           "auth": true,
           "method": "POST",
-          "path": "/v1/users/{userId}/significant-other-requests"
+          "path": "/v1/users/{userId}/significant-other-requests",
+          "scopes": [
+            "aws.cognito.signin.user.admin"
+          ]
         },
         {
           "auth": true,
           "method": "GET",
-          "path": "/v1/me/significant-other-requests"
+          "path": "/v1/me/significant-other-requests",
+          "scopes": [
+            "aws.cognito.signin.user.admin"
+          ]
         },
         {
           "auth": true,
           "method": "DELETE",
-          "path": "/v1/users/{userId}/significant-other-requests/me"
+          "path": "/v1/users/{userId}/significant-other-requests/me",
+          "scopes": [
+            "aws.cognito.signin.user.admin"
+          ]
         },
         {
           "auth": true,
           "method": "POST",
-          "path": "/v1/me/significant-other-requests/{requesterId}/accept"
+          "path": "/v1/me/significant-other-requests/{requesterId}/accept",
+          "scopes": [
+            "aws.cognito.signin.user.admin"
+          ]
         },
         {
           "auth": true,
           "method": "DELETE",
-          "path": "/v1/me/significant-other-requests/{requesterId}"
+          "path": "/v1/me/significant-other-requests/{requesterId}",
+          "scopes": [
+            "aws.cognito.signin.user.admin"
+          ]
         },
         {
           "auth": true,
           "method": "DELETE",
-          "path": "/v1/me/significant-other"
+          "path": "/v1/me/significant-other",
+          "scopes": [
+            "aws.cognito.signin.user.admin"
+          ]
         }
       ],
+      "secrets": {},
       "tables": {
+        "deletion_jobs": "read",
         "follow_requests": "read_write",
         "follows": "read_write",
         "so_requests": "read_write",
         "users": "read_write"
-      }
+      },
+      "timeout_seconds": 15
     },
     "uploads": {
       "buckets": {
         "media": "put"
       },
+      "cognito_actions": [],
+      "env": [
+        "COGNITO_APP_CLIENT_IDS",
+        "MEDIA_BUCKET",
+        "POWERTOOLS_LOG_LEVEL",
+        "POWERTOOLS_SERVICE_NAME",
+        "TABLE_DELETION_JOBS",
+        "TABLE_USERS"
+      ],
       "handler": "app.handlers.uploads_handler.handler",
-      "reads_cursor_secret": false,
+      "memory_mb": 256,
+      "parameters": {},
+      "queues": {},
       "routes": [
         {
           "auth": true,
           "method": "POST",
-          "path": "/v1/uploads"
+          "path": "/v1/uploads",
+          "scopes": [
+            "aws.cognito.signin.user.admin"
+          ]
         }
       ],
-      "tables": {}
+      "secrets": {},
+      "tables": {
+        "deletion_jobs": "read",
+        "users": "read"
+      },
+      "timeout_seconds": 15
     },
     "users": {
       "buckets": {
         "media": "read_write"
       },
+      "cognito_actions": [],
+      "env": [
+        "COGNITO_APP_CLIENT_IDS",
+        "CURSOR_KEY_PARAM",
+        "IDP_REGISTRY",
+        "MEDIA_BUCKET",
+        "MEDIA_CDN_DOMAIN",
+        "POWERTOOLS_LOG_LEVEL",
+        "POWERTOOLS_SERVICE_NAME",
+        "TABLE_DELETION_JOBS",
+        "TABLE_FOLLOWS",
+        "TABLE_FOLLOW_REQUESTS",
+        "TABLE_POSTS",
+        "TABLE_USERNAMES",
+        "TABLE_USERS"
+      ],
       "handler": "app.handlers.users_handler.handler",
-      "reads_cursor_secret": true,
+      "memory_mb": 256,
+      "parameters": {
+        "cursor_key": "read"
+      },
+      "queues": {},
       "routes": [
         {
           "auth": false,
           "method": "GET",
-          "path": "/v1/usernames/{username}/availability"
+          "path": "/v1/usernames/{username}/availability",
+          "scopes": []
         },
         {
           "auth": true,
           "method": "POST",
-          "path": "/v1/me"
+          "path": "/v1/me",
+          "scopes": [
+            "aws.cognito.signin.user.admin"
+          ]
         },
         {
           "auth": true,
           "method": "GET",
-          "path": "/v1/me"
+          "path": "/v1/me",
+          "scopes": [
+            "aws.cognito.signin.user.admin"
+          ]
         },
         {
           "auth": true,
           "method": "PATCH",
-          "path": "/v1/me"
+          "path": "/v1/me",
+          "scopes": [
+            "aws.cognito.signin.user.admin"
+          ]
         },
         {
           "auth": true,
           "method": "PUT",
-          "path": "/v1/me/avatar"
+          "path": "/v1/me/avatar",
+          "scopes": [
+            "aws.cognito.signin.user.admin"
+          ]
         },
         {
           "auth": true,
           "method": "GET",
-          "path": "/v1/me/following"
+          "path": "/v1/me/following",
+          "scopes": [
+            "aws.cognito.signin.user.admin"
+          ]
         },
         {
           "auth": true,
           "method": "GET",
-          "path": "/v1/users"
+          "path": "/v1/users",
+          "scopes": [
+            "aws.cognito.signin.user.admin"
+          ]
         },
         {
           "auth": true,
           "method": "GET",
-          "path": "/v1/users/{userId}"
+          "path": "/v1/users/{userId}",
+          "scopes": [
+            "aws.cognito.signin.user.admin"
+          ]
         }
       ],
+      "secrets": {},
       "tables": {
+        "deletion_jobs": "read",
         "follow_requests": "read_write",
         "follows": "read_write",
         "posts": "read",
         "usernames": "read_write",
         "users": "read_write"
-      }
+      },
+      "timeout_seconds": 15
     },
     "wishes": {
       "buckets": {},
+      "cognito_actions": [],
+      "env": [
+        "COGNITO_APP_CLIENT_IDS",
+        "CURSOR_KEY_PARAM",
+        "POWERTOOLS_LOG_LEVEL",
+        "POWERTOOLS_SERVICE_NAME",
+        "TABLE_DELETION_JOBS",
+        "TABLE_FOLLOWS",
+        "TABLE_IDEMPOTENCY",
+        "TABLE_USERS",
+        "TABLE_WISHES"
+      ],
       "handler": "app.handlers.wishes_handler.handler",
-      "reads_cursor_secret": true,
+      "memory_mb": 256,
+      "parameters": {
+        "cursor_key": "read"
+      },
+      "queues": {},
       "routes": [
         {
           "auth": true,
           "method": "GET",
-          "path": "/v1/me/dream-list"
+          "path": "/v1/me/dream-list",
+          "scopes": [
+            "aws.cognito.signin.user.admin"
+          ]
         },
         {
           "auth": true,
           "method": "POST",
-          "path": "/v1/wishes"
+          "path": "/v1/wishes",
+          "scopes": [
+            "aws.cognito.signin.user.admin"
+          ]
         }
       ],
+      "secrets": {},
       "tables": {
+        "deletion_jobs": "read",
         "follows": "read",
         "idempotency": "read_write",
         "users": "read",
         "wishes": "read_write"
-      }
+      },
+      "timeout_seconds": 15
     }
   },
   "runtime": {
@@ -237,5 +515,135 @@
     "runtime": "python3.12",
     "timeout_seconds": 15
   },
-  "version": 1
+  "secrets": {
+    "apple": {
+      "description": "ourlore/<stage>/idp/apple, operator-created; only when Apple is enabled",
+      "env_var": "APPLE_SECRET_ARN"
+    }
+  },
+  "tables": {
+    "deletion_jobs": {
+      "entity": "DeletionJobs",
+      "env_var": "TABLE_DELETION_JOBS"
+    },
+    "follow_requests": {
+      "entity": "FollowRequests",
+      "env_var": "TABLE_FOLLOW_REQUESTS"
+    },
+    "follows": {
+      "entity": "Follows",
+      "env_var": "TABLE_FOLLOWS"
+    },
+    "idempotency": {
+      "entity": "Idempotency",
+      "env_var": "TABLE_IDEMPOTENCY"
+    },
+    "likes": {
+      "entity": "Likes",
+      "env_var": "TABLE_LIKES"
+    },
+    "posts": {
+      "entity": "Posts",
+      "env_var": "TABLE_POSTS"
+    },
+    "so_requests": {
+      "entity": "SignificantOtherRequests",
+      "env_var": "TABLE_SO_REQUESTS"
+    },
+    "usernames": {
+      "entity": "Usernames",
+      "env_var": "TABLE_USERNAMES"
+    },
+    "users": {
+      "entity": "Users",
+      "env_var": "TABLE_USERS"
+    },
+    "wishes": {
+      "entity": "Wishes",
+      "env_var": "TABLE_WISHES"
+    }
+  },
+  "version": 3,
+  "workers": {
+    "account_purge": {
+      "buckets": {
+        "media": "read_write_delete"
+      },
+      "cognito_actions": [
+        "AdminDeleteUser"
+      ],
+      "env": [
+        "ACCOUNT_PURGE_QUEUE_URL",
+        "COGNITO_USER_POOL_ID",
+        "MEDIA_BUCKET",
+        "POWERTOOLS_LOG_LEVEL",
+        "POWERTOOLS_SERVICE_NAME",
+        "TABLE_DELETION_JOBS",
+        "TABLE_FOLLOWS",
+        "TABLE_FOLLOW_REQUESTS",
+        "TABLE_LIKES",
+        "TABLE_POSTS",
+        "TABLE_SO_REQUESTS",
+        "TABLE_USERNAMES",
+        "TABLE_USERS",
+        "TABLE_WISHES"
+      ],
+      "event_source": {
+        "batch_size": 1,
+        "queue": "account_purge",
+        "report_batch_item_failures": true,
+        "type": "sqs"
+      },
+      "handler": "app.handlers.account_purge_handler.handler",
+      "memory_mb": 256,
+      "parameters": {},
+      "queues": {
+        "account_purge": "send"
+      },
+      "secrets": {},
+      "tables": {
+        "deletion_jobs": "read_write",
+        "follow_requests": "read_write",
+        "follows": "read_write",
+        "likes": "read_write",
+        "posts": "read_write",
+        "so_requests": "read_write",
+        "usernames": "read_write",
+        "users": "read_write",
+        "wishes": "read_write"
+      },
+      "timeout_seconds": 300
+    },
+    "maintenance": {
+      "buckets": {},
+      "cognito_actions": [
+        "ListUsers",
+        "AdminDeleteUser"
+      ],
+      "env": [
+        "ACCOUNT_PURGE_DLQ_URL",
+        "ACCOUNT_PURGE_QUEUE_URL",
+        "COGNITO_USER_POOL_ID",
+        "POWERTOOLS_LOG_LEVEL",
+        "POWERTOOLS_SERVICE_NAME",
+        "TABLE_DELETION_JOBS"
+      ],
+      "event_source": {
+        "expression": "rate(5 minutes)",
+        "type": "schedule"
+      },
+      "handler": "app.handlers.maintenance_handler.handler",
+      "memory_mb": 256,
+      "parameters": {},
+      "queues": {
+        "account_purge": "send",
+        "account_purge_dlq": "receive_delete"
+      },
+      "secrets": {},
+      "tables": {
+        "deletion_jobs": "read_write"
+      },
+      "timeout_seconds": 120
+    }
+  }
 }
