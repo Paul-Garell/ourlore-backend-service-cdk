@@ -106,6 +106,25 @@ export class Alarms extends Construct {
     );
 
     add(
+      new cloudwatch.Alarm(this, 'PurgeThrottled', {
+        alarmName: `${prefix}-purge-throttled`,
+        alarmDescription:
+          'WARNING (not an outage): the account purge hit DynamoDB throttling >= 20 times in 1 hour ' +
+          '(each is a 60 s continuation, G-1); the oldest-pending-deletion alarm is the hard signal.',
+        metric: new cloudwatch.Metric({
+          namespace: METRIC_NAMESPACE,
+          metricName: 'PurgeThrottled',
+          period: Duration.hours(1),
+          statistic: 'Sum',
+        }),
+        threshold: 20,
+        comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        evaluationPeriods: 1,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      }),
+    );
+
+    add(
       new cloudwatch.Alarm(this, 'PreSignUpCheckSkipped', {
         alarmName: `${prefix}-pre-sign-up-check-skipped`,
         alarmDescription:

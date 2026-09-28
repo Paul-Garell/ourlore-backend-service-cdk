@@ -11,9 +11,9 @@ function mutable(): any {
 }
 
 describe('vendored contract.json', () => {
-  test('loads as version 3 with 6 groups and 30 routes', () => {
+  test('loads as version 4 with 6 groups and 30 routes', () => {
     const c = loadContract();
-    expect(c.version).toBe(3);
+    expect(c.version).toBe(4);
     expect(Object.keys(c.resource_groups).sort()).toEqual(['account', 'posts', 'social', 'uploads', 'users', 'wishes']);
     expect(allRoutes(c)).toHaveLength(30);
     expect(Object.keys(c.cognito_triggers)).toEqual(['pre_sign_up']);
@@ -23,6 +23,15 @@ describe('vendored contract.json', () => {
   test('optional and deferred env vars', () => {
     expect(CONTRACT.optional_env_vars).toEqual(['APPLE_SECRET_ARN']);
     expect(CONTRACT.deferred_env_vars).toEqual(['MEDIA_CDN_DOMAIN']);
+  });
+
+  test('media bucket declares its owner key prefixes (D-10)', () => {
+    expect(CONTRACT.buckets.media.key_prefixes).toEqual(['media/', 'pending/', 'thumb/']);
+  });
+
+  test('account group: 20 s timeout and PURGE_DELAY_SECONDS', () => {
+    expect(CONTRACT.resource_groups.account.timeout_seconds).toBe(20);
+    expect(CONTRACT.resource_groups.account.env).toContain('PURGE_DELAY_SECONDS');
   });
 
   test('missing file fails with a ContractError', () => {
@@ -54,6 +63,11 @@ describe('validation fails synth on', () => {
     ['unknown parameter in scope', (c) => { c.resource_groups.users.parameters.nope = 'read'; }, /parameters.nope is not in the parameters catalog/],
     ['unknown parameter access', (c) => { c.resource_groups.users.parameters.cursor_key = 'write'; }, /unknown access 'write'/],
     ['function without parameters', (c) => { delete c.workers.maintenance.parameters; }, /workers.maintenance.parameters must be an object/],
+    ['bucket without key prefixes', (c) => { delete c.buckets.media.key_prefixes; }, /buckets.media.key_prefixes must be a non-empty list/],
+    ['empty key prefixes', (c) => { c.buckets.media.key_prefixes = []; }, /key_prefixes must be a non-empty list/],
+    ['wildcard key prefix', (c) => { c.buckets.media.key_prefixes = ['*']; }, /key_prefixes '\*' is invalid/],
+    ['key prefix without slash', (c) => { c.buckets.media.key_prefixes = ['media']; }, /key_prefixes 'media' is invalid/],
+    ['duplicate key prefix', (c) => { c.buckets.media.key_prefixes = ['media/', 'media/']; }, /has duplicates/],
   ])('%s', (_label, mutate, message) => {
     const c = mutable();
     mutate(c);

@@ -195,8 +195,21 @@ export class ContractBindings {
     for (const [logical, level] of Object.entries(spec.buckets)) {
       const b = this.bucket(logical);
       const { objects, bucket } = BUCKET_ACTIONS[level];
-      out.push(new iam.PolicyStatement({ actions: [...objects], resources: [b.arnForObjects('*')] }));
-      if (bucket.length > 0) out.push(new iam.PolicyStatement({ actions: [...bucket], resources: [b.bucketArn] }));
+      // Owner-first keys (D-10): objects only under the catalog's prefixes, and listing only
+      // with an `s3:prefix` inside them.
+      const prefixes = this.contract.buckets[logical].key_prefixes;
+      out.push(
+        new iam.PolicyStatement({ actions: [...objects], resources: prefixes.map((p) => b.arnForObjects(`${p}*`)) }),
+      );
+      if (bucket.length > 0) {
+        out.push(
+          new iam.PolicyStatement({
+            actions: [...bucket],
+            resources: [b.bucketArn],
+            conditions: { StringLike: { 's3:prefix': prefixes.map((p) => `${p}*`) } },
+          }),
+        );
+      }
     }
     for (const [logical, level] of Object.entries(spec.queues)) {
       out.push(new iam.PolicyStatement({ actions: [...QUEUE_ACTIONS[level]], resources: [this.queue(logical).queueArn] }));

@@ -11,7 +11,7 @@ import { Contract, loadContract } from './contract';
 import { sharedLambdaCode } from './bundling';
 import { sesConfigFromContext, validateSesConfig } from './config/ses';
 import { IdpDefinition, defaultIdpSecretName } from './config/identity-providers';
-import type { StageConfig } from './config/stages';
+import { StageConfig, validateStageConfig } from './config/stages';
 import { AccountLifecycleQueues, AccountLifecycleWorkers } from './constructs/account-lifecycle';
 import { Alarms } from './constructs/alarms';
 import { Api } from './constructs/api';
@@ -45,11 +45,13 @@ export class OurloreStack extends Stack {
     const ses = props.config.ses
       ? validateSesConfig(props.config.ses)
       : sesConfigFromContext(props.config.stage, (key) => this.node.tryGetContext(key));
-    const config: StageConfig = { ...props.config, ses };
+    const config: StageConfig = validateStageConfig({ ...props.config, ses });
     const contract = props.contract ?? loadContract();
     Tags.of(this).add('ourlore:stage', config.stage);
 
     const bindings = new ContractBindings(contract);
+    // ACC-1: purgeNotBefore = requestedAt + PURGE_DELAY_SECONDS (auth_design.md §4.3).
+    bindings.setEnv('PURGE_DELAY_SECONDS', String(config.purgeDelaySeconds));
     const code = sharedLambdaCode(this);
 
     // Data

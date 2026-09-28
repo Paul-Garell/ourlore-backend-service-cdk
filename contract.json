@@ -2,7 +2,12 @@
   "buckets": {
     "media": {
       "description": "Private media bucket (\u00a78)",
-      "env_var": "MEDIA_BUCKET"
+      "env_var": "MEDIA_BUCKET",
+      "key_prefixes": [
+        "media/",
+        "pending/",
+        "thumb/"
+      ]
     }
   },
   "cognito_triggers": {
@@ -40,6 +45,7 @@
     "MEDIA_CDN_DOMAIN": "CloudFront distribution domain for media (deferred: '' for now)",
     "POWERTOOLS_LOG_LEVEL": "Powertools log level",
     "POWERTOOLS_SERVICE_NAME": "Powertools service name (observability)",
+    "PURGE_DELAY_SECONDS": "Seconds between ACC-1 acceptance and the start of the data purge (purgeNotBefore); per-stage config, prod >= access-token lifetime + 60 and >= UPL-1 POST expiry + 60",
     "TABLE_DELETION_JOBS": "DeletionJobs table name",
     "TABLE_FOLLOWS": "Follows table name",
     "TABLE_FOLLOW_REQUESTS": "FollowRequests table name",
@@ -81,6 +87,7 @@
         "IDP_REGISTRY",
         "POWERTOOLS_LOG_LEVEL",
         "POWERTOOLS_SERVICE_NAME",
+        "PURGE_DELAY_SECONDS",
         "TABLE_DELETION_JOBS",
         "TABLE_USERS"
       ],
@@ -107,7 +114,7 @@
         "deletion_jobs": "read_write",
         "users": "read_write"
       },
-      "timeout_seconds": 15
+      "timeout_seconds": 20
     },
     "posts": {
       "buckets": {
@@ -563,7 +570,7 @@
       "env_var": "TABLE_WISHES"
     }
   },
-  "version": 3,
+  "version": 4,
   "workers": {
     "account_purge": {
       "buckets": {

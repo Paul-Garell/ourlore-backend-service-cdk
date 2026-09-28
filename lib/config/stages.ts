@@ -72,7 +72,20 @@ export interface StageConfig {
   readonly logRetentionDays: number;
   /** Powertools log level for every function. */
   readonly logLevel: 'DEBUG' | 'INFO' | 'WARNING' | 'ERROR';
+  /**
+   * Seconds between ACC-1 acceptance and the start of the data purge (`purgeNotBefore`,
+   * auth_design.md §4.3), passed to the `account` function as `PURGE_DELAY_SECONDS`. It covers
+   * work already in flight when the tombstone committed (access tokens, presigned UPL-1
+   * POSTs). `prod` must be at least the access-token lifetime + 60 s and the UPL-1 POST
+   * expiry + 60 s (see `validateStageConfig`).
+   */
+  readonly purgeDelaySeconds: number;
 }
+
+/** Longest UPL-1 presigned POST policy expiry (api_interface.md §8; app `PRESIGN_EXPIRY_SECONDS`). */
+export const UPLOAD_POST_EXPIRY_SECONDS = 900;
+/** Margin added on top of each lifetime the prod purge delay must outlast. */
+export const PURGE_DELAY_MARGIN_SECONDS = 60;
 
 /** AUTH-5, the only unauthenticated route. */
 export const AUTH5_ROUTE_KEY = 'GET /v1/usernames/{username}/availability';
@@ -110,6 +123,8 @@ export const STAGES: Readonly<Record<StageName, StageConfig>> = {
     terminationProtection: false,
     logRetentionDays: 14,
     logLevel: 'INFO',
+    // Short so the deletion E2E finishes in minutes; raise to 960 to rehearse prod timing.
+    purgeDelaySeconds: 120,
   },
   prod: {
     stage: 'prod',
@@ -124,8 +139,43 @@ export const STAGES: Readonly<Record<StageName, StageConfig>> = {
     terminationProtection: true,
     logRetentionDays: 90,
     logLevel: 'INFO',
+    // UPL-1 POST expiry (900 s) + 60 s; also >= access-token lifetime (15 min) + 60 s.
+    purgeDelaySeconds: 960,
   },
 };
+
+/** Smallest `purgeDelaySeconds` a prod stage may use (auth_design.md §4.3). */
+export function minimumProdPurgeDelaySeconds(config: Pick<StageConfig, 'tokens'>): number {
+  return Math.max(
+    config.tokens.accessTokenMinutes * 60 + PURGE_DELAY_MARGIN_SECONDS,
+    UPLOAD_POST_EXPIRY_SECONDS + PURGE_DELAY_MARGIN_SECONDS,
+  );
+}
+
+/**
+ * Synth-time validation of values the stack can't express as types.
+ *
+ * `purgeDelaySeconds` must be a non-negative integer no larger than a day (the purge must
+ * finish within 24 h, REQ-DEL-5). In `prod` it must also outlast every access token and
+ * presigned upload issued before the tombstone committed.
+ */
+export function validateStageConfig(config: StageConfig): StageConfig {
+  const delay = config.purgeDelaySeconds;
+  if (!Number.isInteger(delay) || delay < 0 || delay > 86_400) {
+    throw new Error(`purgeDelaySeconds must be an integer in [0, 86400]; got ${String(delay)}.`);
+  }
+  if (config.stage === 'prod') {
+    const minimum = minimumProdPurgeDelaySeconds(config);
+    if (delay < minimum) {
+      throw new Error(
+        `prod purgeDelaySeconds (${delay}) must be >= ${minimum}: the access-token lifetime ` +
+          `(${config.tokens.accessTokenMinutes * 60} s) + ${PURGE_DELAY_MARGIN_SECONDS} s and the UPL-1 POST ` +
+          `expiry (${UPLOAD_POST_EXPIRY_SECONDS} s) + ${PURGE_DELAY_MARGIN_SECONDS} s (auth_design.md §4.3).`,
+      );
+    }
+  }
+  return config;
+}
 
 /** Resolve a stage name (from `-c stage=...`) to its config, failing on unknown names. */
 export function stageConfig(name: string | undefined): StageConfig {

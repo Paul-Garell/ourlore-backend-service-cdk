@@ -156,6 +156,22 @@ describe('functions (every group, trigger, worker)', () => {
     expect(holders).toEqual(['account_purge', 'maintenance']);
   });
 
+  test('account function: 20 s timeout and the stage purge delay (§4.3)', () => {
+    const [, dev] = functionByHandler(json, CONTRACT.resource_groups.account.handler);
+    expect(dev.Properties!.Timeout).toBe(20);
+    expect(dev.Properties!.Environment.Variables.PURGE_DELAY_SECONDS).toBe('120');
+    const prod = synth(STAGES.prod, {}, SES_TEST_CONTEXT).json;
+    const [, prodFn] = functionByHandler(prod, CONTRACT.resource_groups.account.handler);
+    expect(prodFn.Properties!.Environment.Variables.PURGE_DELAY_SECONDS).toBe('960');
+  });
+
+  test('PURGE_DELAY_SECONDS reaches only the account function', () => {
+    const holders = contractFunctions()
+      .filter((f) => 'PURGE_DELAY_SECONDS' in functionByHandler(json, f.spec.handler)[1].Properties!.Environment.Variables)
+      .map((f) => f.name);
+    expect(holders).toEqual(['account']);
+  });
+
   test('prod log retention is 90 days', () => {
     const prod = synth(STAGES.prod, {}, SES_TEST_CONTEXT).json;
     for (const [, lg] of resourcesOfType(prod, 'AWS::Logs::LogGroup')) expect(lg.Properties!.RetentionInDays).toBe(90);

@@ -81,7 +81,7 @@ describe('alarms', () => {
   });
 
   test('every alarm notifies the topic', () => {
-    expect(Object.keys(alarms)).toHaveLength(8);
+    expect(Object.keys(alarms)).toHaveLength(9);
     for (const a of Object.values(alarms)) expect(a.AlarmActions).toEqual([{ Ref: topicId }]);
   });
 
@@ -141,7 +141,18 @@ describe('alarms', () => {
       ComparisonOperator: 'GreaterThanOrEqualToThreshold',
       TreatMissingData: 'notBreaching',
     });
+    expect(alarms['ourlore-dev-purge-throttled']).toMatchObject({
+      Namespace: 'Ourlore',
+      MetricName: 'PurgeThrottled',
+      Statistic: 'Sum',
+      Period: 3600,
+      Threshold: 20,
+      ComparisonOperator: 'GreaterThanOrEqualToThreshold',
+      TreatMissingData: 'notBreaching',
+    });
+    expect(alarms['ourlore-dev-purge-throttled'].AlarmDescription).toMatch(/^WARNING/);
     expect(alarms['ourlore-dev-oldest-pending-deletion'].Dimensions).toBeUndefined();
     expect(alarms['ourlore-dev-pre-sign-up-check-skipped'].Dimensions).toBeUndefined();
+    expect(alarms['ourlore-dev-purge-throttled'].Dimensions).toBeUndefined();
   });
 });

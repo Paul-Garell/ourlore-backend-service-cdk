@@ -30,7 +30,7 @@ Pinned toolchain: `aws-cdk-lib` 2.271.0, `aws-cdk` 2.1143.0, `constructs` 10.8.1
 | Path | Purpose |
 |---|---|
 | `bin/ourlore.ts` | Entrypoint: `-c stage=dev\|prod` builds `Ourlore-<stage>` |
-| `lib/config/stages.ts` | Per-stage, non-secret config (domain prefix, redirect URLs, enabled IdPs, throttles, WAF, termination protection, log retention) |
+| `lib/config/stages.ts` | Per-stage, non-secret config (domain prefix, redirect URLs, enabled IdPs, throttles, WAF, termination protection, log retention, purge delay) and its synth-time validation |
 | `lib/config/ses.ts` | Prod SES sender from context (`-c sesFromEmail`, `-c sesVerifiedDomain`, `-c sesRegion`), validated |
 | `lib/config/identity-providers.ts` | IdP registry (Apple, Google) |
 | `lib/contract.ts` | Typed loader + validation of `contract.json` |
@@ -38,12 +38,14 @@ Pinned toolchain: `aws-cdk-lib` 2.271.0, `aws-cdk` 2.1143.0, `constructs` 10.8.1
 | `lib/constructs/data.ts` | Tables, media bucket, cursor-key reference |
 | `lib/constructs/api.ts` | HTTP API, JWT authorizer, routes, group Lambdas, access logs |
 | `lib/constructs/account-lifecycle.ts` | Purge queue + DLQ, purge worker, maintenance schedule |
-| `lib/constructs/alarms.ts` | SNS topic and alarms |
+| `lib/constructs/alarms.ts` | SNS topic and alarms (DLQ depth, Lambda errors, API 5xx, oldest pending deletion; warnings: pre-sign-up check skipped, purge throttled) |
 | `lib/constructs/contract-function.ts` | One Lambda (role, log group, env, IAM) from a contract function spec |
 | `lib/bundling.ts` | Local Python bundling (no Docker) |
 | `contract.json` | App/infra contract, vendored from the app repo by `../sync-contract.sh` |
 
-Routes, env vars, runtime, and IAM scope all come from `contract.json`. Change them in the
+Routes, env vars, runtime, and IAM scope all come from `contract.json` (version 4). S3 grants
+are scoped to the bucket's `key_prefixes` (`media/`, `pending/`, `thumb/`): object actions on
+`<prefix>*` only, and `s3:ListBucket` only with an `s3:prefix` condition inside them. Change them in the
 app repo (`src/app/contract.py`), then run `../sync-contract.sh`. A malformed contract (an
 unknown method, a duplicate route, an env name outside the catalog, or a missing value that
 isn't deferred or optional) fails synth.
@@ -60,6 +62,14 @@ isn't deferred or optional) fails synth.
 | Table deletion protection | off | on |
 | Log retention | 14 days | 90 days |
 | Cognito email | Cognito default sender | SES, from `-c sesFromEmail=... -c sesVerifiedDomain=...` (synth fails without them) |
+| Account-purge delay (`purgeDelaySeconds`) | 120 s | 960 s (synth fails below 960) |
+
+`purgeDelaySeconds` is passed to the `account` function as `PURGE_DELAY_SECONDS`: the purge
+of a deleted account's data starts no earlier than `requestedAt + purgeDelaySeconds`, so work
+already in flight when the tombstone committed (access tokens, presigned upload POSTs) has
+expired (auth_design.md §4.3). A `prod` value below the access-token lifetime + 60 s or the
+UPL-1 POST expiry (900 s) + 60 s fails synth. `dev` uses 120 s so the deletion E2E finishes
+in minutes; raise it to 960 s once to rehearse prod timing.
 
 Stateful resources (user pool, tables, media bucket) are `RETAIN` and have pinned logical
 ids, so they survive stack deletion and construct refactors.

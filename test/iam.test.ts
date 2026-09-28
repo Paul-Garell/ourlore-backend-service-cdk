@@ -15,6 +15,7 @@ import {
   functionByHandler,
   grantsOfRole,
   policiesOfRole,
+  resourceKey,
   resourcesOfType,
   roleOf,
   stageContext,
@@ -39,9 +40,10 @@ function expectedGrants(spec: FunctionSpec, logGroupId: string, appleSecretName?
     add(actions, id);
     add(actions, `${id}/index/*`);
   }
-  for (const level of Object.values(spec.buckets)) {
+  for (const [logical, level] of Object.entries(spec.buckets)) {
     const objects = { put: ['PutObject'], read: ['GetObject'], read_write: ['GetObject', 'PutObject'], read_write_delete: ['DeleteObject', 'GetObject', 'PutObject'] }[level];
-    add(objects.map((a) => `s3:${a}`), 'MediaBucket/*');
+    // Only under the owner prefixes (D-10), never `MediaBucket/*`.
+    for (const p of CONTRACT.buckets[logical].key_prefixes) add(objects.map((a) => `s3:${a}`), `MediaBucket/${p}*`);
     if (level !== 'put') add(['s3:ListBucket'], 'MediaBucket');
   }
   for (const [logical, level] of Object.entries(spec.queues)) {
@@ -101,6 +103,37 @@ describe.each([
       }
     }
     expect(resourcesOfType(json, 'AWS::IAM::ManagedPolicy')).toHaveLength(0);
+  });
+
+  test('s3:ListBucket is always limited to the owner prefixes; no object grant on the whole bucket', () => {
+    let listStatements = 0;
+    for (const [, p] of resourcesOfType(json, 'AWS::IAM::Policy')) {
+      for (const s of p.Properties!.PolicyDocument.Statement) {
+        const actions: string[] = [].concat(s.Action);
+        if (actions.includes('s3:ListBucket')) {
+          listStatements += 1;
+          expect(actions).toEqual(['s3:ListBucket']);
+          expect(s.Condition).toEqual({ StringLike: { 's3:prefix': ['media/*', 'pending/*', 'thumb/*'] } });
+        }
+        if (actions.some((a) => a.startsWith('s3:') && a !== 's3:ListBucket')) {
+          for (const r of [].concat(s.Resource)) {
+            expect(resourceKey(r)).toMatch(/^MediaBucket\/(media|pending|thumb)\/\*$/);
+          }
+        }
+      }
+    }
+    // users, posts, and the purge worker list; uploads only puts.
+    expect(listStatements).toBe(3);
+  });
+
+  test('the purge worker may list, read, and delete media, and Scan every purged table', () => {
+    const { grants } = grantsOf(json, CONTRACT.workers.account_purge.handler);
+    for (const p of ['media', 'pending', 'thumb']) expect(grants).toContain(`s3:DeleteObject MediaBucket/${p}/*`);
+    expect(grants).toContain('s3:ListBucket MediaBucket');
+    for (const entity of ['Users', 'Usernames', 'Follows', 'FollowRequests', 'SignificantOtherRequests', 'Posts', 'Likes', 'Wishes']) {
+      expect(grants).toContain(`dynamodb:Scan Table${entity}`);
+    }
+    expect([...grants].some((g) => g.includes('TableIdempotency'))).toBe(false);
   });
 
   test('users function: no Cognito admin actions, no Secrets Manager, and SSM only for the cursor key (§3.11)', () => {

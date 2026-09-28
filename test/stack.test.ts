@@ -8,7 +8,7 @@ import * as path from 'path';
 import { App } from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { LAMBDA_LOCK_FILE, pipInstallArgs, readLambdaLock, sharedLambdaCode } from '../lib/bundling';
-import { STAGES, stageConfig } from '../lib/config/stages';
+import { STAGES, StageConfig, minimumProdPurgeDelaySeconds, stageConfig, validateStageConfig } from '../lib/config/stages';
 import { SES_TEST_CONTEXT, stageContext, synth, withIdps } from './helpers';
 
 describe('stages', () => {
@@ -20,6 +20,32 @@ describe('stages', () => {
       expect(s.callbackUrls).toEqual(['ourlore://auth/callback/']);
       expect(s.logoutUrls).toEqual(['ourlore://auth/signout/']);
       expect(s.tokens).toEqual({ accessTokenMinutes: 15, idTokenMinutes: 15, refreshTokenDays: 90, authSessionMinutes: 3, refreshRotationGraceSeconds: 10 });
+    }
+  });
+
+  test('purge delay: dev 120 s, prod 960 s (§4.3, G-4)', () => {
+    expect(STAGES.dev.purgeDelaySeconds).toBe(120);
+    expect(STAGES.prod.purgeDelaySeconds).toBe(960);
+    expect(minimumProdPurgeDelaySeconds(STAGES.prod)).toBe(960); // max(15 min + 60 s, 900 s + 60 s)
+  });
+
+  test('prod purge delay below UPL-1 POST expiry + 60 s fails synth', () => {
+    const cfg: StageConfig = { ...STAGES.prod, purgeDelaySeconds: 959 };
+    expect(() => validateStageConfig(cfg)).toThrow(/prod purgeDelaySeconds \(959\) must be >= 960/);
+    expect(() => synth(cfg, {}, SES_TEST_CONTEXT)).toThrow(/must be >= 960/);
+  });
+
+  test('prod purge delay below access-token lifetime + 60 s fails synth', () => {
+    const tokens = { ...STAGES.prod.tokens, accessTokenMinutes: 30 };
+    expect(minimumProdPurgeDelaySeconds({ tokens })).toBe(1860);
+    expect(() => validateStageConfig({ ...STAGES.prod, tokens, purgeDelaySeconds: 960 })).toThrow(/must be >= 1860/);
+    expect(() => validateStageConfig({ ...STAGES.prod, tokens, purgeDelaySeconds: 1860 })).not.toThrow();
+  });
+
+  test('dev may use a short purge delay; invalid values fail in any stage', () => {
+    expect(() => validateStageConfig({ ...STAGES.dev, purgeDelaySeconds: 0 })).not.toThrow();
+    for (const bad of [-1, 1.5, Number.NaN, 86_401]) {
+      expect(() => validateStageConfig({ ...STAGES.dev, purgeDelaySeconds: bad })).toThrow(/purgeDelaySeconds must be an integer/);
     }
   });
 
