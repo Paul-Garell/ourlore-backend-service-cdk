@@ -181,7 +181,7 @@ describe('domain and app client (§3.3)', () => {
     template.hasResourceProperties('AWS::Cognito::UserPoolClient', {
       AccessTokenValidity: 15,
       IdTokenValidity: 15,
-      RefreshTokenValidity: 90 * 24 * 60,
+      RefreshTokenValidity: 525_600, // 365 days in minutes
       TokenValidityUnits: { AccessToken: 'minutes', IdToken: 'minutes', RefreshToken: 'minutes' },
       AuthSessionValidity: 3,
     });

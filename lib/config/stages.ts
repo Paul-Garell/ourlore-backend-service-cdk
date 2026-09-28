@@ -22,6 +22,11 @@ export interface ThrottleConfig {
 export interface TokenLifetimes {
   readonly accessTokenMinutes: number;
   readonly idTokenMinutes: number;
+  /**
+   * Refresh-token lifetime in whole days, in [1, {@link MAX_REFRESH_TOKEN_DAYS}] (Cognito's
+   * ceiling is 10 years). Bounds the longest a signed-in device stays signed in without
+   * re-entering credentials; rotation (REQ-ID-5) still replaces the token on every refresh.
+   */
   readonly refreshTokenDays: number;
   /** Hosted UI / SRP session validity (3–15 min). */
   readonly authSessionMinutes: number;
@@ -86,6 +91,8 @@ export interface StageConfig {
 export const UPLOAD_POST_EXPIRY_SECONDS = 900;
 /** Margin added on top of each lifetime the prod purge delay must outlast. */
 export const PURGE_DELAY_MARGIN_SECONDS = 60;
+/** Cognito's maximum refresh-token validity: 10 years, expressed in days (3650). */
+export const MAX_REFRESH_TOKEN_DAYS = 3650;
 
 /** AUTH-5, the only unauthenticated route. */
 export const AUTH5_ROUTE_KEY = 'GET /v1/usernames/{username}/availability';
@@ -95,7 +102,7 @@ export const ACC1_ROUTE_KEY = 'POST /v1/me/deletion';
 const TOKENS: TokenLifetimes = {
   accessTokenMinutes: 15,
   idTokenMinutes: 15,
-  refreshTokenDays: 90,
+  refreshTokenDays: 365,
   authSessionMinutes: 3,
   refreshRotationGraceSeconds: 10,
 };
@@ -158,8 +165,17 @@ export function minimumProdPurgeDelaySeconds(config: Pick<StageConfig, 'tokens'>
  * `purgeDelaySeconds` must be a non-negative integer no larger than a day (the purge must
  * finish within 24 h, REQ-DEL-5). In `prod` it must also outlast every access token and
  * presigned upload issued before the tombstone committed.
+ *
+ * `tokens.refreshTokenDays` must be an integer in [1, {@link MAX_REFRESH_TOKEN_DAYS}]: Cognito
+ * rejects longer lifetimes at deploy time, so fail at synth instead.
  */
 export function validateStageConfig(config: StageConfig): StageConfig {
+  const refreshDays = config.tokens.refreshTokenDays;
+  if (!Number.isInteger(refreshDays) || refreshDays < 1 || refreshDays > MAX_REFRESH_TOKEN_DAYS) {
+    throw new Error(
+      `tokens.refreshTokenDays must be an integer in [1, ${MAX_REFRESH_TOKEN_DAYS}]; got ${String(refreshDays)}.`,
+    );
+  }
   const delay = config.purgeDelaySeconds;
   if (!Number.isInteger(delay) || delay < 0 || delay > 86_400) {
     throw new Error(`purgeDelaySeconds must be an integer in [0, 86400]; got ${String(delay)}.`);

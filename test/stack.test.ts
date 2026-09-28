@@ -8,7 +8,7 @@ import * as path from 'path';
 import { App } from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { LAMBDA_LOCK_FILE, pipInstallArgs, readLambdaLock, sharedLambdaCode } from '../lib/bundling';
-import { STAGES, StageConfig, minimumProdPurgeDelaySeconds, stageConfig, validateStageConfig } from '../lib/config/stages';
+import { MAX_REFRESH_TOKEN_DAYS, STAGES, StageConfig, minimumProdPurgeDelaySeconds, stageConfig, validateStageConfig } from '../lib/config/stages';
 import { SES_TEST_CONTEXT, stageContext, synth, withIdps } from './helpers';
 
 describe('stages', () => {
@@ -19,7 +19,7 @@ describe('stages', () => {
     for (const s of Object.values(STAGES)) {
       expect(s.callbackUrls).toEqual(['ourlore://auth/callback/']);
       expect(s.logoutUrls).toEqual(['ourlore://auth/signout/']);
-      expect(s.tokens).toEqual({ accessTokenMinutes: 15, idTokenMinutes: 15, refreshTokenDays: 90, authSessionMinutes: 3, refreshRotationGraceSeconds: 10 });
+      expect(s.tokens).toEqual({ accessTokenMinutes: 15, idTokenMinutes: 15, refreshTokenDays: 365, authSessionMinutes: 3, refreshRotationGraceSeconds: 10 });
     }
   });
 
@@ -47,6 +47,24 @@ describe('stages', () => {
     for (const bad of [-1, 1.5, Number.NaN, 86_401]) {
       expect(() => validateStageConfig({ ...STAGES.dev, purgeDelaySeconds: bad })).toThrow(/purgeDelaySeconds must be an integer/);
     }
+  });
+
+  test('refresh-token lifetime must be an integer in [1, 3650] days in any stage', () => {
+    expect(MAX_REFRESH_TOKEN_DAYS).toBe(3650);
+    for (const ok of [1, 365, MAX_REFRESH_TOKEN_DAYS]) {
+      for (const base of [STAGES.dev, STAGES.prod]) {
+        const tokens = { ...base.tokens, refreshTokenDays: ok };
+        expect(() => validateStageConfig({ ...base, tokens })).not.toThrow();
+      }
+    }
+    for (const bad of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, MAX_REFRESH_TOKEN_DAYS + 1]) {
+      for (const base of [STAGES.dev, STAGES.prod]) {
+        const tokens = { ...base.tokens, refreshTokenDays: bad };
+        expect(() => validateStageConfig({ ...base, tokens })).toThrow(/tokens\.refreshTokenDays must be an integer in \[1, 3650\]/);
+      }
+    }
+    const tokens = { ...STAGES.dev.tokens, refreshTokenDays: 3651 };
+    expect(() => synth({ ...STAGES.dev, tokens })).toThrow(/refreshTokenDays/);
   });
 
   test('unknown or missing stage fails', () => {
