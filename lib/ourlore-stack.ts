@@ -94,7 +94,9 @@ export class OurloreStack extends Stack {
       dlq: this.queues.dlq,
       httpApi: this.api.httpApi,
       errorFunctions: {
-        account: this.api.functions.account.function,
+        // No `account` alarm: ACC-1 failures show up in api-5xx, and a deletion that was
+        // accepted but stalls is covered by the DLQ and oldest-pending-deletion alarms.
+        // Dropped to stay within CloudWatch's 10 free alarms.
         users: this.api.functions.users.function,
         'account-purge': this.workers.functions.account_purge.function,
         maintenance: this.workers.functions.maintenance.function,

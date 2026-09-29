@@ -80,8 +80,10 @@ describe('alarms', () => {
     });
   });
 
-  test('every alarm notifies the topic', () => {
-    expect(Object.keys(alarms)).toHaveLength(11);
+  test('every alarm notifies the topic, and the count stays within the free tier', () => {
+    // CloudWatch's always-free allowance is 10 standard alarms per account.
+    expect(Object.keys(alarms)).toHaveLength(10);
+    expect(alarms['ourlore-dev-account-errors']).toBeUndefined();
     for (const a of Object.values(alarms)) expect(a.AlarmActions).toEqual([{ Ref: topicId }]);
   });
 
@@ -96,7 +98,6 @@ describe('alarms', () => {
   });
 
   test.each([
-    ['account', CONTRACT.resource_groups.account.handler],
     ['users', CONTRACT.resource_groups.users.handler],
     ['account-purge', CONTRACT.workers.account_purge.handler],
     ['maintenance', CONTRACT.workers.maintenance.handler],

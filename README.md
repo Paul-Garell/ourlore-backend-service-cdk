@@ -38,7 +38,7 @@ Pinned toolchain: `aws-cdk-lib` 2.271.0, `aws-cdk` 2.1143.0, `constructs` 10.8.1
 | `lib/constructs/data.ts` | Tables, media bucket, cursor-key reference |
 | `lib/constructs/api.ts` | HTTP API, JWT authorizer, routes, group Lambdas, access logs |
 | `lib/constructs/account-lifecycle.ts` | Purge queue + DLQ, purge worker, maintenance schedule |
-| `lib/constructs/alarms.ts` | SNS topic and alarms (DLQ depth, Lambda errors, API 5xx, oldest pending deletion, post-confirmation errors; warnings: pre-sign-up check skipped, post-confirmation sign-out failed, purge throttled) |
+| `lib/constructs/alarms.ts` | SNS topic and 10 alarms, the CloudWatch free-tier limit (DLQ depth, Lambda errors on users/purge/maintenance, API 5xx, oldest pending deletion, post-confirmation errors; warnings: pre-sign-up check skipped, post-confirmation sign-out failed, purge throttled) |
 | `lib/constructs/contract-function.ts` | One Lambda (role, log group, env, IAM) from a contract function spec |
 | `lib/bundling.ts` | Local Python bundling (no Docker) |
 | `contract.json` | App/infra contract, vendored from the app repo by `../sync-contract.sh` |
