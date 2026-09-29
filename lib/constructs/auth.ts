@@ -114,6 +114,8 @@ export class Auth extends Construct {
   readonly enabledIdps: readonly IdpDefinition[];
   readonly identityProviders: readonly cognito.IUserPoolIdentityProvider[];
   readonly preSignUp: ContractFunction;
+  /** Revokes every session after ConfirmForgotPassword (security finding F-1). */
+  readonly postConfirmation: ContractFunction;
   /** `IDP_REGISTRY` env value for the enabled providers. */
   readonly idpRegistryJson: string;
   /** `<prefix>.auth.<region>.amazoncognito.com` */
@@ -142,6 +144,13 @@ export class Auth extends Construct {
     if (!trigger) throw new Error('contract.json has no cognito_triggers.pre_sign_up.');
     if (trigger.env.includes('COGNITO_USER_POOL_ID')) {
       throw new Error('pre_sign_up must not receive COGNITO_USER_POOL_ID (pool ↔ function cycle).');
+    }
+    // Post-confirmation trigger (F-1): AdminUserGlobalSignOut after a password reset. Same
+    // standalone-policy pattern, for the same reason.
+    const postTrigger = contract.cognito_triggers.post_confirmation;
+    if (!postTrigger) throw new Error('contract.json has no cognito_triggers.post_confirmation.');
+    if (postTrigger.env.includes('COGNITO_USER_POOL_ID')) {
+      throw new Error('post_confirmation must not receive COGNITO_USER_POOL_ID (pool ↔ function cycle).');
     }
     const prod = config.stage === 'prod';
 
@@ -206,6 +215,19 @@ export class Auth extends Construct {
       standalonePolicyScope: this,
     });
     this.userPool.addTrigger(cognito.UserPoolOperation.PRE_SIGN_UP, this.preSignUp.function);
+
+    this.postConfirmation = new ContractFunction(this, 'PostConfirmation', {
+      spec: postTrigger,
+      bindings,
+      code: props.code,
+      serviceName: 'ourlore-post-confirmation',
+      logLevel: config.logLevel,
+      logRetentionDays: config.logRetentionDays,
+      logRemovalPolicy: prod ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY,
+      description: 'Cognito post-confirmation: sign out every session after a password reset',
+      standalonePolicyScope: this,
+    });
+    this.userPool.addTrigger(cognito.UserPoolOperation.POST_CONFIRMATION, this.postConfirmation.function);
 
     // --- Domain (§3.3): Cognito prefix domain, classic hosted UI.
     this.domain = this.userPool.addDomain('Domain', {

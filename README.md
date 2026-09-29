@@ -34,16 +34,16 @@ Pinned toolchain: `aws-cdk-lib` 2.271.0, `aws-cdk` 2.1143.0, `constructs` 10.8.1
 | `lib/config/ses.ts` | Prod SES sender from context (`-c sesFromEmail`, `-c sesVerifiedDomain`, `-c sesRegion`), validated |
 | `lib/config/identity-providers.ts` | IdP registry (Apple, Google) |
 | `lib/contract.ts` | Typed loader + validation of `contract.json` |
-| `lib/constructs/auth.ts` | User pool, domain, iOS client, IdPs, pre-sign-up trigger, WAF |
+| `lib/constructs/auth.ts` | User pool, domain, iOS client, IdPs, pre-sign-up and post-confirmation triggers, WAF |
 | `lib/constructs/data.ts` | Tables, media bucket, cursor-key reference |
 | `lib/constructs/api.ts` | HTTP API, JWT authorizer, routes, group Lambdas, access logs |
 | `lib/constructs/account-lifecycle.ts` | Purge queue + DLQ, purge worker, maintenance schedule |
-| `lib/constructs/alarms.ts` | SNS topic and alarms (DLQ depth, Lambda errors, API 5xx, oldest pending deletion; warnings: pre-sign-up check skipped, purge throttled) |
+| `lib/constructs/alarms.ts` | SNS topic and alarms (DLQ depth, Lambda errors, API 5xx, oldest pending deletion, post-confirmation errors; warnings: pre-sign-up check skipped, post-confirmation sign-out failed, purge throttled) |
 | `lib/constructs/contract-function.ts` | One Lambda (role, log group, env, IAM) from a contract function spec |
 | `lib/bundling.ts` | Local Python bundling (no Docker) |
 | `contract.json` | App/infra contract, vendored from the app repo by `../sync-contract.sh` |
 
-Routes, env vars, runtime, and IAM scope all come from `contract.json` (version 4). S3 grants
+Routes, env vars, runtime, and IAM scope all come from `contract.json` (version 5). S3 grants
 are scoped to the bucket's `key_prefixes` (`media/`, `pending/`, `thumb/`): object actions on
 `<prefix>*` only, and `s3:ListBucket` only with an `s3:prefix` condition inside them. Change them in the
 app repo (`src/app/contract.py`), then run `../sync-contract.sh`. A malformed contract (an
@@ -218,7 +218,8 @@ It reads the stack outputs (`describe-stacks`, read-only) and writes the git-ign
 `OurloreBackend.example.json`, is committed next to it.
 
 Stack outputs: `Region`, `UserPoolId`, `UserPoolClientId`, `CognitoDomain`, `ApiEndpoint`,
-`EnabledIdps`, `CallbackUrls`, `LogoutUrls`, `OAuthScopes`, `PreSignUpLogGroup`. List-valued
+`EnabledIdps`, `CallbackUrls`, `LogoutUrls`, `OAuthScopes`, `PreSignUpLogGroup`,
+`PostConfirmationFunctionArn` (E2E step 12). List-valued
 outputs are JSON arrays.
 
 ## Commands

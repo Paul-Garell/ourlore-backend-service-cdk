@@ -7,6 +7,7 @@ import { STAGES } from '../lib/config/stages';
 import { CONTRACT, CfnResource, FIXTURE_SECRET_NAMES, SES_TEST_CONTEXT, functionByHandler, policiesOfRole, resourcesOfType, roleOf, synth, withIdps } from './helpers';
 
 const TRIGGER_HANDLER = CONTRACT.cognito_triggers.pre_sign_up.handler;
+const POST_CONFIRMATION_HANDLER = CONTRACT.cognito_triggers.post_confirmation.handler;
 
 describe('user pool (§3.2)', () => {
   const { template, json } = synth();
@@ -66,11 +67,15 @@ describe('user pool (§3.2)', () => {
     });
   });
 
-  test('pre-sign-up trigger is wired', () => {
+  test('pre-sign-up and post-confirmation triggers are wired (and nothing else)', () => {
     const [fnId] = functionByHandler(json, TRIGGER_HANDLER);
-    template.hasResourceProperties('AWS::Cognito::UserPool', {
-      LambdaConfig: { PreSignUp: { 'Fn::GetAtt': [fnId, 'Arn'] } },
+    const [postId] = functionByHandler(json, POST_CONFIRMATION_HANDLER);
+    const pool = resourcesOfType(json, 'AWS::Cognito::UserPool')[0][1];
+    expect(pool.Properties!.LambdaConfig).toEqual({
+      PreSignUp: { 'Fn::GetAtt': [fnId, 'Arn'] },
+      PostConfirmation: { 'Fn::GetAtt': [postId, 'Arn'] },
     });
+    expect(template).toBeTruthy();
   });
 
 });
@@ -336,11 +341,75 @@ describe('pre-sign-up trigger (§3.5)', () => {
 
   test('Cognito may invoke the trigger', () => {
     const perms = resourcesOfType(json, 'AWS::Lambda::Permission').filter(
-      ([, p]) => p.Properties!.Principal === 'cognito-idp.amazonaws.com',
+      ([, p]) =>
+        p.Properties!.Principal === 'cognito-idp.amazonaws.com' &&
+        JSON.stringify(p.Properties!.FunctionName) === JSON.stringify({ 'Fn::GetAtt': [fnId, 'Arn'] }),
     );
     expect(perms).toHaveLength(1);
-    expect(perms[0][1].Properties!.FunctionName).toEqual({ 'Fn::GetAtt': [fnId, 'Arn'] });
     expect(perms[0][1].Properties!.SourceArn).toEqual({ 'Fn::GetAtt': ['UserPool', 'Arn'] });
+  });
+});
+
+describe('post-confirmation trigger (security finding F-1)', () => {
+  const { json, stack } = synth();
+  const [fnId, fn] = functionByHandler(json, POST_CONFIRMATION_HANDLER);
+  const policies = policiesOfRole(json, roleOf(fn));
+  const standalone = policies.filter(([, p]) =>
+    JSON.stringify(p.Properties!.PolicyDocument).includes('cognito-idp:'),
+  );
+
+  test('runtime settings, X-Ray, log group with retention; env is Powertools only', () => {
+    expect(fn.Properties!.Timeout).toBe(5);
+    expect(fn.Properties!.MemorySize).toBe(256);
+    expect(fn.Properties!.TracingConfig).toEqual({ Mode: 'Active' });
+    expect(Object.keys(fn.Properties!.Environment.Variables).sort()).toEqual(
+      ['POWERTOOLS_LOG_LEVEL', 'POWERTOOLS_SERVICE_NAME'],
+    );
+    expect(fn.Properties!.Environment.Variables.POWERTOOLS_SERVICE_NAME).toBe('ourlore-post-confirmation');
+    const logGroupId = fn.Properties!.LoggingConfig.LogGroup.Ref;
+    expect(json.Resources[logGroupId].Type).toBe('AWS::Logs::LogGroup');
+    expect(json.Resources[logGroupId].Properties!.RetentionInDays).toEqual(expect.any(Number));
+  });
+
+  test('standalone policy grants exactly AdminUserGlobalSignOut on the exact pool ARN', () => {
+    expect(standalone).toHaveLength(1);
+    const [, policy] = standalone[0];
+    expect(policy.Properties!.PolicyDocument.Statement).toEqual([
+      { Action: 'cognito-idp:AdminUserGlobalSignOut', Effect: 'Allow', Resource: { 'Fn::GetAtt': ['UserPool', 'Arn'] } },
+    ]);
+  });
+
+  test('the policy is constructed outside the function and role subtrees', () => {
+    const post = stack.auth.postConfirmation;
+    const policy = post.standalonePolicy!;
+    expect(policy).toBeDefined();
+    expect(policy.node.scope).toBe(stack.auth);
+    expect(policy.node.path.startsWith(`${post.role.node.path}/`)).toBe(false);
+    expect(policy.node.path.startsWith(`${post.function.node.path}/`)).toBe(false);
+    expect(policy.node.path.startsWith(`${post.node.path}/`)).toBe(false);
+  });
+
+  test('the function does not depend on the standalone policy (no cycle)', () => {
+    const [policyId] = standalone[0];
+    expect(fn.DependsOn ?? []).not.toContain(policyId);
+    for (const dep of fn.DependsOn ?? []) {
+      const r = json.Resources[dep];
+      if (r.Type === 'AWS::IAM::Policy') expect(JSON.stringify(r)).not.toContain('UserPool');
+    }
+  });
+
+  test('Cognito may invoke it, from this pool only', () => {
+    const perms = resourcesOfType(json, 'AWS::Lambda::Permission').filter(
+      ([, p]) =>
+        p.Properties!.Principal === 'cognito-idp.amazonaws.com' &&
+        JSON.stringify(p.Properties!.FunctionName) === JSON.stringify({ 'Fn::GetAtt': [fnId, 'Arn'] }),
+    );
+    expect(perms).toHaveLength(1);
+    expect(perms[0][1].Properties!.SourceArn).toEqual({ 'Fn::GetAtt': ['UserPool', 'Arn'] });
+  });
+
+  test('output names the function for the E2E wiring check', () => {
+    expect(json.Outputs.PostConfirmationFunctionArn.Value).toEqual({ 'Fn::GetAtt': [fnId, 'Arn'] });
   });
 });
 

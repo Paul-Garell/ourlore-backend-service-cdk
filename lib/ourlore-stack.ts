@@ -99,6 +99,7 @@ export class OurloreStack extends Stack {
         'account-purge': this.workers.functions.account_purge.function,
         maintenance: this.workers.functions.maintenance.function,
       },
+      postConfirmationFunction: this.auth.postConfirmation.function,
     });
 
     // Outputs (§3.10). List values are JSON arrays so scripts can parse them unambiguously.
@@ -115,5 +116,10 @@ export class OurloreStack extends Stack {
     out('LogoutUrls', JSON.stringify(config.logoutUrls), 'OAuth sign-out URLs (JSON)');
     out('OAuthScopes', JSON.stringify(OAUTH_SCOPES.map((s) => s.scopeName)), 'OAuth scopes of the iOS client (JSON)');
     out('PreSignUpLogGroup', this.auth.preSignUp.logGroup.logGroupName, 'Pre-sign-up log group (E2E step 11)');
+    out(
+      'PostConfirmationFunctionArn',
+      this.auth.postConfirmation.function.functionArn,
+      'Post-confirmation trigger function (E2E step 12 checks the pool is wired to it)',
+    );
   }
 }

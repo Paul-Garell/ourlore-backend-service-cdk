@@ -89,7 +89,7 @@ describe('outputs (§3.10)', () => {
   test('all client-config outputs exist', () => {
     const { json } = synth();
     expect(Object.keys(json.Outputs).sort()).toEqual(
-      ['ApiEndpoint', 'CallbackUrls', 'CognitoDomain', 'EnabledIdps', 'LogoutUrls', 'OAuthScopes', 'PreSignUpLogGroup', 'Region', 'UserPoolClientId', 'UserPoolId'].sort(),
+      ['ApiEndpoint', 'CallbackUrls', 'CognitoDomain', 'EnabledIdps', 'LogoutUrls', 'OAuthScopes', 'PostConfirmationFunctionArn', 'PreSignUpLogGroup', 'Region', 'UserPoolClientId', 'UserPoolId'].sort(),
     );
     expect(json.Outputs.UserPoolId.Value).toEqual({ Ref: 'UserPool' });
     expect(json.Outputs.UserPoolClientId.Value).toEqual({ Ref: 'UserPoolClientIos' });

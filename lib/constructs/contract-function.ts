@@ -261,8 +261,8 @@ export interface ContractFunctionProps {
   readonly description: string;
   /**
    * When set, the contract grants go into a standalone `iam.Policy` created in this scope
-   * instead of the role's default policy. Used by the pre-sign-up trigger to avoid the
-   * pool → function → policy → pool cycle (§3.5). The scope must be outside both the role's
+   * instead of the role's default policy. Used by the Cognito triggers (pre-sign-up,
+   * post-confirmation) to avoid the pool → function → policy → pool cycle (§3.5). The scope must be outside both the role's
    * and the function's construct subtrees.
    */
   readonly standalonePolicyScope?: Construct;

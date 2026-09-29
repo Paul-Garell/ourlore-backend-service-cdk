@@ -169,10 +169,23 @@ describe.each([
 
   test('only purge and maintenance hold AdminDeleteUser (D-11)', () => {
     const holders = contractFunctions()
-      .filter((f) => [...grantsOf(json, f.spec.handler).grants].some((g) => g.startsWith('cognito-idp:Admin')))
+      .filter((f) => [...grantsOf(json, f.spec.handler).grants].some((g) => g.startsWith('cognito-idp:AdminDeleteUser ')))
       .map((f) => f.name)
       .sort();
     expect(holders).toEqual(['account_purge', 'maintenance']);
+  });
+
+  test('Admin* grants: purge and maintenance, plus exactly AdminUserGlobalSignOut for post-confirmation (F-1)', () => {
+    const admin = (handler: string): string[] =>
+      [...grantsOf(json, handler).grants].filter((g) => g.startsWith('cognito-idp:Admin')).sort();
+    const holders = contractFunctions()
+      .filter((f) => admin(f.spec.handler).length > 0)
+      .map((f) => f.name)
+      .sort();
+    expect(holders).toEqual(['account_purge', 'maintenance', 'post_confirmation']);
+    expect(admin(CONTRACT.cognito_triggers.post_confirmation.handler)).toEqual([
+      'cognito-idp:AdminUserGlobalSignOut UserPool',
+    ]);
   });
 
   test('only the account function may read the Apple secret, and only when Apple is enabled', () => {
@@ -200,9 +213,12 @@ describe('Apple disabled', () => {
 });
 
 describe('trigger policy is standalone', () => {
-  test('the pre-sign-up role has a default policy (logs, X-Ray) and one standalone policy (ListUsers)', () => {
+  test.each([
+    ['pre-sign-up', CONTRACT.cognito_triggers.pre_sign_up.handler],
+    ['post-confirmation', CONTRACT.cognito_triggers.post_confirmation.handler],
+  ])('the %s role has a default policy (logs, X-Ray) and one standalone policy (Cognito)', (_n, handler) => {
     const { json } = synth();
-    const [, fn] = functionByHandler(json, CONTRACT.cognito_triggers.pre_sign_up.handler);
+    const [, fn] = functionByHandler(json, handler);
     const policies = policiesOfRole(json, roleOf(fn));
     expect(policies).toHaveLength(2);
     const paths = policies.map(([id]) => id);

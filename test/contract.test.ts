@@ -11,12 +11,12 @@ function mutable(): any {
 }
 
 describe('vendored contract.json', () => {
-  test('loads as version 4 with 6 groups and 30 routes', () => {
+  test('loads as version 5 with 6 groups and 30 routes', () => {
     const c = loadContract();
-    expect(c.version).toBe(4);
+    expect(c.version).toBe(5);
     expect(Object.keys(c.resource_groups).sort()).toEqual(['account', 'posts', 'social', 'uploads', 'users', 'wishes']);
     expect(allRoutes(c)).toHaveLength(30);
-    expect(Object.keys(c.cognito_triggers)).toEqual(['pre_sign_up']);
+    expect(Object.keys(c.cognito_triggers).sort()).toEqual(['post_confirmation', 'pre_sign_up']);
     expect(Object.keys(c.workers).sort()).toEqual(['account_purge', 'maintenance']);
   });
 

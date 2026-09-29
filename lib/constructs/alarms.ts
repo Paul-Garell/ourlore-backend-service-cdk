@@ -25,6 +25,11 @@ export interface AlarmsProps {
   readonly httpApi: apigwv2.IHttpApi;
   /** Functions with an `Errors` alarm, keyed by kebab-case name (used in the alarm name). */
   readonly errorFunctions: Readonly<Record<string, lambda.IFunction>>;
+  /**
+   * The post-confirmation trigger (F-1). Any `Errors` data point means a password reset may
+   * not have revoked the account's earlier sessions, so its alarm fires at 1, not 3.
+   */
+  readonly postConfirmationFunction: lambda.IFunction;
 }
 
 /** SNS topic plus every alarm. */
@@ -118,6 +123,39 @@ export class Alarms extends Construct {
           statistic: 'Sum',
         }),
         threshold: 20,
+        comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        evaluationPeriods: 1,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      }),
+    );
+
+    add(
+      new cloudwatch.Alarm(this, 'PostConfirmationErrors', {
+        alarmName: `${prefix}-post-confirmation-errors`,
+        alarmDescription:
+          'Lambda errors on post-confirmation: a password reset may not have signed out earlier ' +
+          'sessions. Check the log group and run admin-user-global-sign-out for affected users.',
+        metric: props.postConfirmationFunction.metricErrors({ period: fiveMin, statistic: 'Sum' }),
+        threshold: 1,
+        comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        evaluationPeriods: 1,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      }),
+    );
+
+    add(
+      new cloudwatch.Alarm(this, 'PostConfirmationSignOutFailed', {
+        alarmName: `${prefix}-post-confirmation-sign-out-failed`,
+        alarmDescription:
+          'WARNING: after a password reset, AdminUserGlobalSignOut failed >= 1 time in 1 hour, so ' +
+          'earlier sessions may still be valid (the reset itself succeeded). Revoke manually.',
+        metric: new cloudwatch.Metric({
+          namespace: METRIC_NAMESPACE,
+          metricName: 'PostConfirmationSignOutFailed',
+          period: Duration.hours(1),
+          statistic: 'Sum',
+        }),
+        threshold: 1,
         comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
         evaluationPeriods: 1,
         treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,

@@ -133,9 +133,9 @@ describe('functions (every group, trigger, worker)', () => {
     expect(p.Environment.Variables.POWERTOOLS_SERVICE_NAME).toBe(`ourlore-${f.name.replace(/_/g, '-')}`);
   });
 
-  test('9 functions: 6 groups, 1 trigger, 2 workers', () => {
+  test('10 functions: 6 groups, 2 triggers, 2 workers', () => {
     expect(resourcesOfType(json, 'AWS::Lambda::Function')).toHaveLength(contractFunctions().length);
-    expect(contractFunctions()).toHaveLength(9);
+    expect(contractFunctions()).toHaveLength(10);
   });
 
   test('deferred env vars are exactly MEDIA_CDN_DOMAIN and are ""', () => {

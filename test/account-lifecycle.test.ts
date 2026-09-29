@@ -81,7 +81,7 @@ describe('alarms', () => {
   });
 
   test('every alarm notifies the topic', () => {
-    expect(Object.keys(alarms)).toHaveLength(9);
+    expect(Object.keys(alarms)).toHaveLength(11);
     for (const a of Object.values(alarms)) expect(a.AlarmActions).toEqual([{ Ref: topicId }]);
   });
 
@@ -111,6 +111,36 @@ describe('alarms', () => {
       Threshold: 3,
       ComparisonOperator: 'GreaterThanOrEqualToThreshold',
     });
+  });
+
+  test('post-confirmation Errors >= 1 over 5 min (F-1)', () => {
+    const [fnId] = functionByHandler(json, CONTRACT.cognito_triggers.post_confirmation.handler);
+    expect(alarms['ourlore-dev-post-confirmation-errors']).toMatchObject({
+      Namespace: 'AWS/Lambda',
+      MetricName: 'Errors',
+      Dimensions: [{ Name: 'FunctionName', Value: { Ref: fnId } }],
+      Statistic: 'Sum',
+      Period: 300,
+      Threshold: 1,
+      ComparisonOperator: 'GreaterThanOrEqualToThreshold',
+      TreatMissingData: 'notBreaching',
+    });
+  });
+
+  test('Ourlore/PostConfirmationSignOutFailed >= 1 in 1 hour: dimensionless warning (F-1)', () => {
+    const a = alarms['ourlore-dev-post-confirmation-sign-out-failed'];
+    expect(a).toMatchObject({
+      Namespace: 'Ourlore',
+      MetricName: 'PostConfirmationSignOutFailed',
+      Statistic: 'Sum',
+      Period: 3600,
+      Threshold: 1,
+      ComparisonOperator: 'GreaterThanOrEqualToThreshold',
+      EvaluationPeriods: 1,
+      TreatMissingData: 'notBreaching',
+    });
+    expect(a.Dimensions).toBeUndefined();
+    expect(a.AlarmDescription).toMatch(/^WARNING/);
   });
 
   test('API 5xx >= 10 over 5 min', () => {
