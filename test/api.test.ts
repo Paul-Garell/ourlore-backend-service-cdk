@@ -2,7 +2,7 @@
  * HTTP API, routes, authorizers, throttles, access logs, and group functions (auth_design.md
  * §3.7, REQ-ID-2, REQ-OPS-1/4, D-12, REQ-Q-1 route/authorizer contract test).
  */
-import { ACC1_ROUTE_KEY, AUTH5_ROUTE_KEY, STAGES } from '../lib/config/stages';
+import { ACC1_ROUTE_KEY, AUTH5_ROUTE_KEY, STAGES, USR3_ROUTE_KEY } from '../lib/config/stages';
 import { allRoutes, routeKey } from '../lib/contract';
 import { CONTRACT, CfnResource, SES_TEST_CONTEXT, contractFunctions, functionByHandler, resourcesOfType, synth } from './helpers';
 
@@ -81,15 +81,26 @@ describe('stage: throttles and access logs (REQ-OPS-1/4)', () => {
     });
   });
 
-  test('per-route throttles for AUTH-5 and ACC-1, and the stage waits for those routes', () => {
+  test('per-route throttles for AUTH-5, ACC-1, and USR-3, and the stage waits for those routes', () => {
     expect(stage.Properties!.RouteSettings).toEqual({
       [AUTH5_ROUTE_KEY]: { ThrottlingRateLimit: 10, ThrottlingBurstLimit: 20 },
       [ACC1_ROUTE_KEY]: { ThrottlingRateLimit: 2, ThrottlingBurstLimit: 5 },
+      [USR3_ROUTE_KEY]: { ThrottlingRateLimit: 10, ThrottlingBurstLimit: 20 },
     });
+    const throttled = [AUTH5_ROUTE_KEY, ACC1_ROUTE_KEY, USR3_ROUTE_KEY];
     const routeIds = resourcesOfType(json, 'AWS::ApiGatewayV2::Route')
-      .filter(([, r]) => [AUTH5_ROUTE_KEY, ACC1_ROUTE_KEY].includes(r.Properties!.RouteKey))
+      .filter(([, r]) => throttled.includes(r.Properties!.RouteKey))
       .map(([id]) => id);
+    expect(routeIds).toHaveLength(throttled.length);
     for (const id of routeIds) expect(stage.DependsOn).toContain(id);
+  });
+
+  test('USR-3 (GET /v1/users) gets the AUTH-5 throttle in every stage (A-15)', () => {
+    expect(USR3_ROUTE_KEY).toBe('GET /v1/users');
+    for (const cfg of Object.values(STAGES)) {
+      expect(cfg.throttle.routes[USR3_ROUTE_KEY]).toEqual({ rate: 10, burst: 20 });
+      expect(cfg.throttle.routes[USR3_ROUTE_KEY]).toEqual(cfg.throttle.routes[AUTH5_ROUTE_KEY]);
+    }
   });
 
   test('a throttle for a non-contract route fails synth', () => {

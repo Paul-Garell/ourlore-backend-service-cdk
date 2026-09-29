@@ -98,6 +98,8 @@ export const MAX_REFRESH_TOKEN_DAYS = 3650;
 export const AUTH5_ROUTE_KEY = 'GET /v1/usernames/{username}/availability';
 /** ACC-1, account deletion. */
 export const ACC1_ROUTE_KEY = 'POST /v1/me/deletion';
+/** USR-3, user search (A-15: AUTH-5 limits against username enumeration). */
+export const USR3_ROUTE_KEY = 'GET /v1/users';
 
 const TOKENS: TokenLifetimes = {
   accessTokenMinutes: 15,
@@ -112,6 +114,7 @@ const THROTTLE: StageConfig['throttle'] = {
   routes: {
     [AUTH5_ROUTE_KEY]: { rate: 10, burst: 20 },
     [ACC1_ROUTE_KEY]: { rate: 2, burst: 5 },
+    [USR3_ROUTE_KEY]: { rate: 10, burst: 20 },
   },
 };
 
